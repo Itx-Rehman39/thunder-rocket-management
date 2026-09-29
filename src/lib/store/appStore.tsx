@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   Player,
   Coach,
@@ -24,77 +24,16 @@ import {
   INITIAL_GALLERY,
   INITIAL_PLAYING_XI_IDS,
 } from '@/lib/data/initialData';
+import {
+  DEFAULT_ADMIN_ACCOUNTS,
+  DEFAULT_KIT,
+  DEFAULT_CLUB_SETTINGS,
+  AppNotification,
+  ClubSettings,
+} from '@/lib/data/defaults';
 
-export const DEFAULT_ADMIN_ACCOUNTS: AdminAccount[] = [
-  {
-    id: 'admin-1',
-    name: 'Master Admin / Club President',
-    email: 'admin@thunderrocket.com',
-    password: 'admin123',
-    role: 'Club President / Super Admin',
-    createdAt: '2025-01-01',
-  },
-  {
-    id: 'admin-2',
-    name: 'Team Operations Manager',
-    email: 'manager@thunderrocket.com',
-    password: 'manager123',
-    role: 'Team Manager',
-    createdAt: '2025-01-05',
-  },
-  {
-    id: 'admin-3',
-    name: 'Head Cricket Coach',
-    email: 'coach@thunderrocket.com',
-    password: 'coach123',
-    role: 'Head Coach',
-    createdAt: '2025-01-10',
-  },
-  {
-    id: 'admin-4',
-    name: 'Chief Match Scorer',
-    email: 'scorer@thunderrocket.com',
-    password: 'scorer123',
-    role: 'Match Scorer',
-    createdAt: '2025-01-15',
-  },
-];
-
-export interface AppNotification {
-  id: string;
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-  type: 'match' | 'training' | 'announcement' | 'system';
-}
-
-export const DEFAULT_KIT: KitConfig = {
-  primaryColor: '#071820',
-  secondaryColor: '#00B4D8',
-  accentColor: '#881337',
-  baseColor: '#F4FBFD',
-  patternStyle: 'camo',
-  teamName: 'THUNDER ROCKET 138/10R',
-  sponsorName: 'ROCKET ENERGY',
-  jerseyNumber: 10,
-  jerseyName: 'USMAN TARIQ',
-  customKitImageUrl: '/images/kit/official_kit_mockup.jpg',
-};
-
-export interface ClubSettings {
-  clubName: string;
-  slogan: string;
-  franchiseCode: string;
-  homeVenue: string;
-}
-
-export const DEFAULT_CLUB_SETTINGS: ClubSettings = {
-  clubName: 'Thunder Rocket 138/10R',
-  slogan: 'STRIKE LIKE THUNDER • SOAR LIKE A ROCKET • 138/10R PRIDE',
-  franchiseCode: 'TR-138/10R-2025',
-  homeVenue: '138/10R Cricket Arena / National Cricket Ground',
-};
+export { DEFAULT_ADMIN_ACCOUNTS, DEFAULT_KIT, DEFAULT_CLUB_SETTINGS };
+export type { AppNotification, ClubSettings };
 
 interface AppContextType {
   // Roles & Authentication
@@ -133,6 +72,9 @@ interface AppContextType {
   announcements: Announcement[];
   galleryItems: GalleryItem[];
   playingXIIds: string[];
+
+  // Server Sync
+  refreshServerData: () => Promise<void>;
 
   // Player CRUD
   addPlayer: (player: Omit<Player, 'id'>) => void;
@@ -201,11 +143,12 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(true);
+  // Security: Default to PUBLIC and UNPROTECTED until explicit valid admin authentication
+  const [currentRole, setCurrentRole] = useState<UserRole>('PUBLIC');
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>(DEFAULT_ADMIN_ACCOUNTS);
-  const [activeAdminUser, setActiveAdminUser] = useState<AdminAccount | null>(DEFAULT_ADMIN_ACCOUNTS[0]);
+  const [activeAdminUser, setActiveAdminUser] = useState<AdminAccount | null>(null);
   const [kitConfig, setKitConfig] = useState<KitConfig>(DEFAULT_KIT);
   const [clubSettings, setClubSettings] = useState<ClubSettings>(DEFAULT_CLUB_SETTINGS);
 
@@ -215,7 +158,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>(INITIAL_TRAINING);
   const [announcements, setAnnouncements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>(INITIAL_GALLERY);
-  const [playingXIIds, setPlayingXIIds] = useState<string[]>(INITIAL_PLAYING_XI_IDS);
+  const [playingXIIds, setPlayingXIIdsState] = useState<string[]>(INITIAL_PLAYING_XI_IDS);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -247,55 +190,96 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
   ]);
 
-  // Load from LocalStorage if available
-  useEffect(() => {
+  // Helper to persist data changes to server API (db.json)
+  const syncToServer = useCallback(async (key: string, data: any) => {
     try {
-      const storedRole = localStorage.getItem('tr_role');
-      if (storedRole) setCurrentRole(storedRole as UserRole);
+      await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, data }),
+      });
+    } catch (err) {
+      console.warn(`[Sync] Failed to persist ${key} to server:`, err);
+    }
+  }, []);
 
+  // Helper to fetch persistent data from server API
+  const refreshServerData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/data', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.players && Array.isArray(data.players)) {
+        setPlayers(data.players);
+        try { localStorage.setItem('tr_players', JSON.stringify(data.players)); } catch (e) {}
+      }
+      if (data.coaches && Array.isArray(data.coaches)) {
+        setCoaches(data.coaches);
+        try { localStorage.setItem('tr_coaches', JSON.stringify(data.coaches)); } catch (e) {}
+      }
+      if (data.matches && Array.isArray(data.matches)) {
+        setMatches(data.matches);
+        try { localStorage.setItem('tr_matches', JSON.stringify(data.matches)); } catch (e) {}
+      }
+      if (data.trainingSessions && Array.isArray(data.trainingSessions)) {
+        setTrainingSessions(data.trainingSessions);
+        try { localStorage.setItem('tr_training', JSON.stringify(data.trainingSessions)); } catch (e) {}
+      }
+      if (data.announcements && Array.isArray(data.announcements)) {
+        setAnnouncements(data.announcements);
+        try { localStorage.setItem('tr_announcements', JSON.stringify(data.announcements)); } catch (e) {}
+      }
+      if (data.galleryItems && Array.isArray(data.galleryItems)) {
+        setGalleryItems(data.galleryItems);
+      }
+      if (data.playingXIIds && Array.isArray(data.playingXIIds)) {
+        setPlayingXIIdsState(data.playingXIIds);
+        try { localStorage.setItem('tr_playing_xi', JSON.stringify(data.playingXIIds)); } catch (e) {}
+      }
+      if (data.kitConfig) {
+        setKitConfig(data.kitConfig);
+        try { localStorage.setItem('tr_kit_config', JSON.stringify(data.kitConfig)); } catch (e) {}
+      }
+      if (data.clubSettings) {
+        setClubSettings(data.clubSettings);
+        try { localStorage.setItem('tr_club_settings', JSON.stringify(data.clubSettings)); } catch (e) {}
+      }
+      if (data.adminAccounts && Array.isArray(data.adminAccounts)) {
+        setAdminAccounts(data.adminAccounts);
+        try { localStorage.setItem('tr_admin_accounts', JSON.stringify(data.adminAccounts)); } catch (e) {}
+      }
+    } catch (e) {
+      console.warn('Could not connect to /api/data, using local cache:', e);
+    }
+  }, []);
+
+  // Initialization & Live Polling
+  useEffect(() => {
+    // 1. Check Auth State - strictly only true if stored as 'true'
+    try {
       const storedAuth = localStorage.getItem('tr_admin_auth');
-      if (storedAuth === 'false') {
+      if (storedAuth === 'true') {
+        setIsAdminAuthenticated(true);
+        const storedActive = localStorage.getItem('tr_active_admin');
+        if (storedActive) {
+          try {
+            const parsed = JSON.parse(storedActive);
+            setActiveAdminUser(parsed);
+            setCurrentRole('SUPER_ADMIN');
+          } catch (e) {}
+        }
+      } else {
         setIsAdminAuthenticated(false);
         setActiveAdminUser(null);
-      } else {
-        setIsAdminAuthenticated(true);
+        setCurrentRole('PUBLIC');
       }
 
-      const storedAccounts = localStorage.getItem('tr_admin_accounts');
-      if (storedAccounts) {
-        try {
-          const parsed = JSON.parse(storedAccounts);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setAdminAccounts(parsed);
-          }
-        } catch (e) {}
-      }
-
-      const storedActiveAdmin = localStorage.getItem('tr_active_admin');
-      if (storedActiveAdmin) {
-        try {
-          setActiveAdminUser(JSON.parse(storedActiveAdmin));
-        } catch (e) {}
-      } else if (storedAuth !== 'false') {
-        setActiveAdminUser(DEFAULT_ADMIN_ACCOUNTS[0]);
-      }
-
-      const storedKit = localStorage.getItem('tr_kit_config');
-      if (storedKit) {
-        try {
-          setKitConfig({ ...DEFAULT_KIT, ...JSON.parse(storedKit) });
-        } catch (e) {}
-      }
-
-      const storedClub = localStorage.getItem('tr_club_settings');
-      if (storedClub) {
-        try {
-          setClubSettings({ ...DEFAULT_CLUB_SETTINGS, ...JSON.parse(storedClub) });
-        } catch (e) {}
-      }
-
+      // Fast-load local cache while server fetch completes
       const storedPlayers = localStorage.getItem('tr_players');
       if (storedPlayers) setPlayers(JSON.parse(storedPlayers));
+
+      const storedCoaches = localStorage.getItem('tr_coaches');
+      if (storedCoaches) setCoaches(JSON.parse(storedCoaches));
 
       const storedMatches = localStorage.getItem('tr_matches');
       if (storedMatches) setMatches(JSON.parse(storedMatches));
@@ -307,13 +291,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (storedAnnouncements) setAnnouncements(JSON.parse(storedAnnouncements));
 
       const storedPlayingXI = localStorage.getItem('tr_playing_xi');
-      if (storedPlayingXI) setPlayingXIIds(JSON.parse(storedPlayingXI));
-    } catch (e) {
-      console.warn('LocalStorage not available or parse error', e);
-    }
-  }, []);
+      if (storedPlayingXI) setPlayingXIIdsState(JSON.parse(storedPlayingXI));
 
-  // Save changes to LocalStorage
+      const storedKit = localStorage.getItem('tr_kit_config');
+      if (storedKit) setKitConfig({ ...DEFAULT_KIT, ...JSON.parse(storedKit) });
+
+      const storedClub = localStorage.getItem('tr_club_settings');
+      if (storedClub) setClubSettings({ ...DEFAULT_CLUB_SETTINGS, ...JSON.parse(storedClub) });
+
+      const storedGallery = localStorage.getItem('tr_gallery');
+      if (storedGallery) setGalleryItems(JSON.parse(storedGallery));
+
+      const storedAccounts = localStorage.getItem('tr_admin_accounts');
+      if (storedAccounts) setAdminAccounts(JSON.parse(storedAccounts));
+    } catch (e) {}
+
+    // 2. Fetch fresh persistent data from server immediately
+    refreshServerData();
+
+    // 3. Keep open tabs/devices synced in background (every 8 seconds + window focus)
+    const syncInterval = setInterval(refreshServerData, 8000);
+    const onWindowFocus = () => refreshServerData();
+    window.addEventListener('focus', onWindowFocus);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('focus', onWindowFocus);
+    };
+  }, [refreshServerData]);
+
+  // Save role to state
   const saveRole = (role: UserRole) => {
     setCurrentRole(role);
     try {
@@ -332,7 +339,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Admin Authentication & Multi-Account Methods
   const adminLogin = (passwordOrEmail: string, password?: string): boolean => {
-    // If only one param is passed (e.g. quick password or master code)
+    // Single parameter mode: password only
     if (password === undefined) {
       const cleanPass = passwordOrEmail.trim();
       const legacyMatches = ['admin', 'admin123', 'admin138', '138', '138/10r'].includes(cleanPass.toLowerCase());
@@ -341,6 +348,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const selected = accountByPass || adminAccounts[0] || DEFAULT_ADMIN_ACCOUNTS[0];
         setIsAdminAuthenticated(true);
         setActiveAdminUser(selected);
+        setCurrentRole('SUPER_ADMIN');
         try {
           localStorage.setItem('tr_admin_auth', 'true');
           localStorage.setItem('tr_active_admin', JSON.stringify(selected));
@@ -350,7 +358,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
 
-    // Both email and password provided
+    // Two parameter mode: Email + Password
     const cleanEmail = passwordOrEmail.trim().toLowerCase();
     const cleanPass = password.trim();
 
@@ -361,6 +369,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (matched) {
       setIsAdminAuthenticated(true);
       setActiveAdminUser(matched);
+      setCurrentRole('SUPER_ADMIN');
       try {
         localStorage.setItem('tr_admin_auth', 'true');
         localStorage.setItem('tr_active_admin', JSON.stringify(matched));
@@ -368,7 +377,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return true;
     }
 
-    // Fallback: master legacy check for main admin
+    // Master legacy check
     if (
       (cleanEmail === 'admin@thunderrocket.com' || cleanEmail === 'admin') &&
       ['admin', 'admin123', 'admin138', '138', '138/10r'].includes(cleanPass.toLowerCase())
@@ -376,6 +385,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const fallbackAccount = adminAccounts[0] || DEFAULT_ADMIN_ACCOUNTS[0];
       setIsAdminAuthenticated(true);
       setActiveAdminUser(fallbackAccount);
+      setCurrentRole('SUPER_ADMIN');
       try {
         localStorage.setItem('tr_admin_auth', 'true');
         localStorage.setItem('tr_active_admin', JSON.stringify(fallbackAccount));
@@ -389,6 +399,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const adminLogout = () => {
     setIsAdminAuthenticated(false);
     setActiveAdminUser(null);
+    setCurrentRole('PUBLIC');
     try {
       localStorage.setItem('tr_admin_auth', 'false');
       localStorage.removeItem('tr_active_admin');
@@ -416,6 +427,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const updated = [...adminAccounts, newAccount];
     setAdminAccounts(updated);
+    syncToServer('adminAccounts', updated);
     try {
       localStorage.setItem('tr_admin_accounts', JSON.stringify(updated));
     } catch (e) {}
@@ -440,6 +452,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return a;
     });
     setAdminAccounts(updated);
+    syncToServer('adminAccounts', updated);
     try {
       localStorage.setItem('tr_admin_accounts', JSON.stringify(updated));
       if (activeAdminUser && activeAdminUser.id === id) {
@@ -459,6 +472,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const updated = adminAccounts.filter((a) => a.id !== id);
     setAdminAccounts(updated);
+    syncToServer('adminAccounts', updated);
     try {
       localStorage.setItem('tr_admin_accounts', JSON.stringify(updated));
       if (activeAdminUser && activeAdminUser.id === id) {
@@ -471,6 +485,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resetAdminAccounts = () => {
     setAdminAccounts(DEFAULT_ADMIN_ACCOUNTS);
+    syncToServer('adminAccounts', DEFAULT_ADMIN_ACCOUNTS);
     try {
       localStorage.setItem('tr_admin_accounts', JSON.stringify(DEFAULT_ADMIN_ACCOUNTS));
     } catch (e) {}
@@ -480,6 +495,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateKitConfig = (updates: Partial<KitConfig>) => {
     setKitConfig((prev) => {
       const next = { ...prev, ...updates };
+      syncToServer('kitConfig', next);
       try {
         localStorage.setItem('tr_kit_config', JSON.stringify(next));
       } catch (e) {}
@@ -489,6 +505,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resetKitConfig = () => {
     setKitConfig(DEFAULT_KIT);
+    syncToServer('kitConfig', DEFAULT_KIT);
     try {
       localStorage.setItem('tr_kit_config', JSON.stringify(DEFAULT_KIT));
     } catch (e) {}
@@ -497,6 +514,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateClubSettings = (updates: Partial<ClubSettings>) => {
     setClubSettings((prev) => {
       const next = { ...prev, ...updates };
+      syncToServer('clubSettings', next);
       try {
         localStorage.setItem('tr_club_settings', JSON.stringify(next));
       } catch (e) {}
@@ -504,30 +522,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Current User Object Derived from Role
+  // Current User Object
   const currentUser: User = {
-    id: 'user-active',
-    name:
-      currentRole === 'SUPER_ADMIN'
-        ? 'Chief Operations Officer (Admin)'
-        : currentRole === 'TEAM_MANAGER'
-        ? 'Saadullah Khan (Manager)'
-        : currentRole === 'HEAD_COACH'
-        ? 'Rashid Latif (Head Coach)'
-        : currentRole === 'BATTING_COACH'
-        ? 'Salman Ahmed (Batting Coach)'
-        : currentRole === 'BOWLING_COACH'
-        ? 'Waqas Ahmed (Bowling Coach)'
-        : currentRole === 'FIELDING_COACH'
-        ? 'Imran Khan (Fielding Coach)'
-        : currentRole === 'FITNESS_COACH'
-        ? 'Usman Mahmood (Fitness Coach)'
-        : currentRole === 'PERFORMANCE_ANALYST'
-        ? 'Ahsan Raza (Analyst)'
-        : currentRole === 'PHYSIOTHERAPIST'
-        ? 'Dr. Ayesha Malik (Physio)'
-        : 'Ali Khan (Player #07)',
-    email: 'admin@thunderrockets.com',
+    id: activeAdminUser?.id || 'u-public',
+    name: activeAdminUser?.name || 'Public Visitor',
+    email: activeAdminUser?.email || 'visitor@thunderrockets.com',
     role: currentRole,
     playerId: currentRole === 'PLAYER' ? 'p-1' : undefined,
   };
@@ -540,6 +539,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const updated = [newPlayer, ...players];
     setPlayers(updated);
+    syncToServer('players', updated);
     try {
       localStorage.setItem('tr_players', JSON.stringify(updated));
     } catch (e) {}
@@ -558,6 +558,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return p;
     });
     setPlayers(updated);
+    syncToServer('players', updated);
     try {
       localStorage.setItem('tr_players', JSON.stringify(updated));
     } catch (e) {}
@@ -570,9 +571,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deletePlayer = (id: string) => {
     const updated = players.filter((p) => p.id !== id);
     setPlayers(updated);
-    setPlayingXIIds((prev) => prev.filter((pId) => pId !== id));
+    syncToServer('players', updated);
+    const updatedXI = playingXIIds.filter((pId) => pId !== id);
+    setPlayingXIIds(updatedXI);
+    syncToServer('playingXIIds', updatedXI);
     try {
       localStorage.setItem('tr_players', JSON.stringify(updated));
+      localStorage.setItem('tr_playing_xi', JSON.stringify(updatedXI));
     } catch (e) {}
   };
 
@@ -591,6 +596,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return p;
     });
     setPlayers(updated);
+    syncToServer('players', updated);
     try {
       localStorage.setItem('tr_players', JSON.stringify(updated));
     } catch (e) {}
@@ -599,15 +605,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Coach CRUD
   const addCoach = (coachData: Omit<Coach, 'id'>) => {
     const newCoach: Coach = { ...coachData, id: `c-${Date.now()}` };
-    setCoaches((prev) => [newCoach, ...prev]);
+    const updated = [newCoach, ...coaches];
+    setCoaches(updated);
+    syncToServer('coaches', updated);
+    try {
+      localStorage.setItem('tr_coaches', JSON.stringify(updated));
+    } catch (e) {}
   };
 
   const updateCoach = (id: string, updates: Partial<Coach>) => {
-    setCoaches((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
+    const updated = coaches.map((c) => (c.id === id ? { ...c, ...updates } : c));
+    setCoaches(updated);
+    syncToServer('coaches', updated);
+    try {
+      localStorage.setItem('tr_coaches', JSON.stringify(updated));
+    } catch (e) {}
   };
 
   const deleteCoach = (id: string) => {
-    setCoaches((prev) => prev.filter((c) => c.id !== id));
+    const updated = coaches.filter((c) => c.id !== id);
+    setCoaches(updated);
+    syncToServer('coaches', updated);
+    try {
+      localStorage.setItem('tr_coaches', JSON.stringify(updated));
+    } catch (e) {}
   };
 
   // Match Management & Interactive Live Scorer
@@ -615,6 +636,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newMatch: Match = { ...matchData, id: `m-${Date.now()}` };
     const updated = [newMatch, ...matches];
     setMatches(updated);
+    syncToServer('matches', updated);
     try {
       localStorage.setItem('tr_matches', JSON.stringify(updated));
     } catch (e) {}
@@ -623,6 +645,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateMatch = (id: string, updates: Partial<Match>) => {
     const updated = matches.map((m) => (m.id === id ? { ...m, ...updates } : m));
     setMatches(updated);
+    syncToServer('matches', updated);
     try {
       localStorage.setItem('tr_matches', JSON.stringify(updated));
     } catch (e) {}
@@ -631,14 +654,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteMatch = (id: string) => {
     const updated = matches.filter((m) => m.id !== id);
     setMatches(updated);
+    syncToServer('matches', updated);
     try {
       localStorage.setItem('tr_matches', JSON.stringify(updated));
     } catch (e) {}
   };
 
   const rotateStrike = (matchId: string) => {
-    setMatches((prev) =>
-      prev.map((m) => {
+    setMatches((prev) => {
+      const updated = prev.map((m) => {
         if (m.id !== matchId || !m.liveState) return m;
         return {
           ...m,
@@ -648,13 +672,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             nonStrikerId: m.liveState.strikerId,
           },
         };
-      })
-    );
+      });
+      syncToServer('matches', updated);
+      return updated;
+    });
   };
 
   const setLiveBowler = (matchId: string, bowlerId: string) => {
-    setMatches((prev) =>
-      prev.map((m) => {
+    setMatches((prev) => {
+      const updated = prev.map((m) => {
         if (m.id !== matchId || !m.liveState) return m;
         return {
           ...m,
@@ -663,13 +689,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             currentBowlerId: bowlerId,
           },
         };
-      })
-    );
+      });
+      syncToServer('matches', updated);
+      return updated;
+    });
   };
 
   const setLiveStriker = (matchId: string, strikerId: string) => {
-    setMatches((prev) =>
-      prev.map((m) => {
+    setMatches((prev) => {
+      const updated = prev.map((m) => {
         if (m.id !== matchId || !m.liveState) return m;
         return {
           ...m,
@@ -678,13 +706,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             strikerId,
           },
         };
-      })
-    );
+      });
+      syncToServer('matches', updated);
+      return updated;
+    });
   };
 
   const setLiveNonStriker = (matchId: string, nonStrikerId: string) => {
-    setMatches((prev) =>
-      prev.map((m) => {
+    setMatches((prev) => {
+      const updated = prev.map((m) => {
         if (m.id !== matchId || !m.liveState) return m;
         return {
           ...m,
@@ -693,8 +723,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             nonStrikerId,
           },
         };
-      })
-    );
+      });
+      syncToServer('matches', updated);
+      return updated;
+    });
   };
 
   const recordBall = (
@@ -829,6 +861,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       });
 
+      syncToServer('matches', updated);
       try {
         localStorage.setItem('tr_matches', JSON.stringify(updated));
       } catch (e) {}
@@ -837,6 +870,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Playing XI
+  const setPlayingXIIds = (ids: string[]) => {
+    setPlayingXIIdsState(ids);
+    syncToServer('playingXIIds', ids);
+    try {
+      localStorage.setItem('tr_playing_xi', JSON.stringify(ids));
+    } catch (e) {}
+  };
+
   const togglePlayerInPlayingXI = (playerId: string) => {
     let updated: string[];
     if (playingXIIds.includes(playerId)) {
@@ -854,7 +895,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
     }
-    setPlayingXIIds(updated);
+    setPlayingXIIdsState(updated);
+    syncToServer('playingXIIds', updated);
     try {
       localStorage.setItem('tr_playing_xi', JSON.stringify(updated));
     } catch (e) {}
@@ -865,6 +907,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newSession: TrainingSession = { ...sessionData, id: `tr-${Date.now()}` };
     const updated = [newSession, ...trainingSessions];
     setTrainingSessions(updated);
+    syncToServer('trainingSessions', updated);
     try {
       localStorage.setItem('tr_training', JSON.stringify(updated));
     } catch (e) {}
@@ -873,6 +916,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateTrainingSession = (id: string, updates: Partial<TrainingSession>) => {
     const updated = trainingSessions.map((s) => (s.id === id ? { ...s, ...updates } : s));
     setTrainingSessions(updated);
+    syncToServer('trainingSessions', updated);
     try {
       localStorage.setItem('tr_training', JSON.stringify(updated));
     } catch (e) {}
@@ -904,6 +948,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { ...session, attendance: newAttendance };
     });
     setTrainingSessions(updated);
+    syncToServer('trainingSessions', updated);
     try {
       localStorage.setItem('tr_training', JSON.stringify(updated));
     } catch (e) {}
@@ -912,6 +957,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteTrainingSession = (id: string) => {
     const updated = trainingSessions.filter((s) => s.id !== id);
     setTrainingSessions(updated);
+    syncToServer('trainingSessions', updated);
     try {
       localStorage.setItem('tr_training', JSON.stringify(updated));
     } catch (e) {}
@@ -922,6 +968,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newAnn: Announcement = { ...data, id: `ann-${Date.now()}` };
     const updated = [newAnn, ...announcements];
     setAnnouncements(updated);
+    syncToServer('announcements', updated);
     try {
       localStorage.setItem('tr_announcements', JSON.stringify(updated));
     } catch (e) {}
@@ -930,6 +977,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateAnnouncement = (id: string, updates: Partial<Announcement>) => {
     const updated = announcements.map((a) => (a.id === id ? { ...a, ...updates } : a));
     setAnnouncements(updated);
+    syncToServer('announcements', updated);
     try {
       localStorage.setItem('tr_announcements', JSON.stringify(updated));
     } catch (e) {}
@@ -938,6 +986,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteAnnouncement = (id: string) => {
     const updated = announcements.filter((a) => a.id !== id);
     setAnnouncements(updated);
+    syncToServer('announcements', updated);
     try {
       localStorage.setItem('tr_announcements', JSON.stringify(updated));
     } catch (e) {}
@@ -946,15 +995,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Gallery CRUD
   const addGalleryItem = (itemData: Omit<GalleryItem, 'id'>) => {
     const newItem: GalleryItem = { ...itemData, id: `g-${Date.now()}` };
-    setGalleryItems((prev) => [newItem, ...prev]);
+    const updated = [newItem, ...galleryItems];
+    setGalleryItems(updated);
+    syncToServer('galleryItems', updated);
+    try {
+      localStorage.setItem('tr_gallery', JSON.stringify(updated));
+    } catch (e) {}
   };
 
   const updateGalleryItem = (id: string, updates: Partial<GalleryItem>) => {
-    setGalleryItems((prev) => prev.map((g) => (g.id === id ? { ...g, ...updates } : g)));
+    const updated = galleryItems.map((g) => (g.id === id ? { ...g, ...updates } : g));
+    setGalleryItems(updated);
+    syncToServer('galleryItems', updated);
+    try {
+      localStorage.setItem('tr_gallery', JSON.stringify(updated));
+    } catch (e) {}
   };
 
   const deleteGalleryItem = (id: string) => {
-    setGalleryItems((prev) => prev.filter((g) => g.id !== id));
+    const updated = galleryItems.filter((g) => g.id !== id);
+    setGalleryItems(updated);
+    syncToServer('galleryItems', updated);
+    try {
+      localStorage.setItem('tr_gallery', JSON.stringify(updated));
+    } catch (e) {}
   };
 
   // Notification helper
@@ -971,20 +1035,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isLoggedIn,
         loginAs,
         logout,
+
+        adminAccounts,
+        activeAdminUser,
         isAdminAuthenticated,
         adminLogin,
         adminLogout,
-        adminAccounts,
-        activeAdminUser,
         addAdminAccount,
         updateAdminAccount,
         deleteAdminAccount,
         resetAdminAccounts,
+
         kitConfig,
         updateKitConfig,
         resetKitConfig,
+
         clubSettings,
         updateClubSettings,
+
         players,
         coaches,
         matches,
@@ -992,14 +1060,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         announcements,
         galleryItems,
         playingXIIds,
+
+        refreshServerData,
+
         addPlayer,
         updatePlayer,
         deletePlayer,
         archivePlayer,
         addCoachNote,
+
         addCoach,
         updateCoach,
         deleteCoach,
+
         addMatch,
         updateMatch,
         deleteMatch,
@@ -1008,18 +1081,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLiveBowler,
         setLiveStriker,
         setLiveNonStriker,
+
         setPlayingXIIds,
         togglePlayerInPlayingXI,
+
         addTrainingSession,
         updateTrainingSession,
         deleteTrainingSession,
         updatePlayerAttendance,
+
         addAnnouncement,
         updateAnnouncement,
         deleteAnnouncement,
+
         addGalleryItem,
         updateGalleryItem,
         deleteGalleryItem,
+
         notifications,
         markNotificationAsRead,
         searchQuery,

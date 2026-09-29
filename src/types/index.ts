@@ -1,4 +1,5 @@
 export type UserRole =
+  | 'PUBLIC'
   | 'SUPER_ADMIN'
   | 'TEAM_MANAGER'
   | 'HEAD_COACH'
