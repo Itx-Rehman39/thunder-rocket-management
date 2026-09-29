@@ -129,7 +129,7 @@ export interface Coach {
 }
 
 export type MatchStatus = 'Upcoming' | 'Live' | 'Completed' | 'Abandoned';
-export type MatchType = 'T20' | 'ODI' | 'Test' | 'T10';
+export type MatchType = 'T20' | 'ODI' | 'Test' | 'T10' | 'Custom';
 
 export interface BattingScorecardRow {
   playerId: string;
@@ -208,6 +208,7 @@ export interface Match {
   id: string;
   competition: string;
   matchType: MatchType;
+  totalOvers?: number;
   opponent: string;
   opponentLogo?: string;
   date: string;

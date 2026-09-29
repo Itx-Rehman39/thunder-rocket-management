@@ -21,7 +21,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match }) => {
       <div className="px-5 py-3 bg-[#F8FCFD] border-b border-[#D1EAEF] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#005F73] px-2.5 py-0.5 rounded-full bg-[#E0F7FA] border border-[#00B4D8]/20">
-            {match.matchType}
+            {match.totalOvers ? `${match.totalOvers} Overs` : match.matchType}
           </span>
           <span className="text-xs text-slate-500 font-medium truncate max-w-[200px]">
             {match.competition}

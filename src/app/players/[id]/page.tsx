@@ -146,6 +146,11 @@ export default function PlayerProfilePage() {
                     Vice Captain
                   </span>
                 )}
+                {player.isWicketkeeper && (
+                  <span className="px-3 py-1 rounded-full bg-[#0B222E] text-[#00E5FF] text-xs font-bold uppercase tracking-wider border border-[#00B4D8]/40 shadow">
+                    Wicketkeeper
+                  </span>
+                )}
                 <span className="px-3 py-1 rounded-full bg-slate-800 text-slate-300 text-xs font-mono">
                   {player.status}
                 </span>

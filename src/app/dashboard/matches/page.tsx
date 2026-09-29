@@ -15,6 +15,7 @@ export default function DashboardMatchesPage() {
   const [formData, setFormData] = useState({
     competition: 'Premier Cricket Super League 2025',
     matchType: 'T20' as MatchType,
+    totalOvers: 20,
     opponent: '',
     date: '2025-05-18',
     time: '04:00 PM',
@@ -28,6 +29,7 @@ export default function DashboardMatchesPage() {
     setFormData({
       competition: 'Premier Cricket Super League 2025',
       matchType: 'T20',
+      totalOvers: 20,
       opponent: 'Stallions',
       date: '20 May 2025',
       time: '07:30 PM',
@@ -43,6 +45,7 @@ export default function DashboardMatchesPage() {
     setFormData({
       competition: m.competition,
       matchType: m.matchType,
+      totalOvers: m.totalOvers || (m.matchType === 'T10' ? 10 : m.matchType === 'ODI' ? 50 : 20),
       opponent: m.opponent,
       date: m.date,
       time: m.time,
@@ -55,10 +58,14 @@ export default function DashboardMatchesPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = {
+      ...formData,
+      totalOvers: Number(formData.totalOvers) || 20,
+    };
     if (editingMatchId) {
-      updateMatch(editingMatchId, formData);
+      updateMatch(editingMatchId, payload);
     } else {
-      addMatch(formData);
+      addMatch(payload);
     }
     setIsModalOpen(false);
   };
@@ -113,9 +120,16 @@ export default function DashboardMatchesPage() {
                     </td>
 
                     <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded bg-[#E0F7FA] text-[#005F73] font-bold text-[10px]">
-                        {m.matchType}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 rounded bg-[#E0F7FA] text-[#005F73] font-bold text-[10px]">
+                          {m.matchType}
+                        </span>
+                        {m.totalOvers && (
+                          <span className="px-2 py-0.5 rounded bg-[#0B222E] text-[#00E5FF] font-bold text-[10px]">
+                            {m.totalOvers} Overs
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[11px] text-slate-500 mt-0.5 truncate max-w-[140px]">
                         {m.competition}
                       </div>
@@ -227,7 +241,7 @@ export default function DashboardMatchesPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Competition / League</label>
                     <input
@@ -240,17 +254,41 @@ export default function DashboardMatchesPage() {
                   </div>
 
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Match Type</label>
+                    <label className="font-bold text-slate-700 block mb-1">Match Format</label>
                     <select
                       value={formData.matchType}
-                      onChange={(e) => setFormData({ ...formData, matchType: e.target.value as MatchType })}
+                      onChange={(e) => {
+                        const newType = e.target.value as MatchType;
+                        let defaultOvers = formData.totalOvers;
+                        if (newType === 'T10') defaultOvers = 10;
+                        if (newType === 'T20') defaultOvers = 20;
+                        if (newType === 'ODI') defaultOvers = 50;
+                        setFormData({ ...formData, matchType: newType, totalOvers: defaultOvers });
+                      }}
                       className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-[#00B4D8]"
                     >
+                      <option value="Custom">Custom Overs Match</option>
                       <option value="T20">T20 (20 Overs)</option>
-                      <option value="ODI">ODI (50 Overs)</option>
-                      <option value="Test">Test (Multi-day)</option>
                       <option value="T10">T10 (10 Overs)</option>
+                      <option value="ODI">ODI (50 Overs)</option>
+                      <option value="Test">Test Match</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Total Overs <span className="text-[#00B4D8] font-normal">(Any custom number)</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={100}
+                      value={formData.totalOvers}
+                      onChange={(e) => setFormData({ ...formData, totalOvers: Number(e.target.value) })}
+                      placeholder="e.g. 6, 8, 12, 15, 20..."
+                      className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-[#00B4D8] font-mono font-bold"
+                    />
                   </div>
                 </div>
 

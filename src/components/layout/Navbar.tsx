@@ -98,47 +98,49 @@ export const Navbar: React.FC = () => {
               <Search className="w-5 h-5" />
             </button>
 
-            {/* Quick Role Switcher Pill (For Instant Testing of All 10 Roles) */}
-            <div className="relative">
-              <button
-                onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-cyan-300 bg-[#0F2C3A] border border-[#0A9396]/40 rounded-full hover:bg-[#13384A] transition-all"
-                title="Switch role to test specific role permissions"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-[#00DF82]" />
-                <span className="truncate max-w-[110px]">
-                  {ROLE_OPTIONS.find((r) => r.role === currentRole)?.label}
-                </span>
-                <ChevronDown className="w-3 h-3 opacity-70" />
-              </button>
+            {/* Role Switcher (Visible ONLY when logged in as authorized admin) */}
+            {isAdminAuthenticated && (
+              <div className="relative">
+                <button
+                  onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-cyan-300 bg-[#0F2C3A] border border-[#0A9396]/40 rounded-full hover:bg-[#13384A] transition-all"
+                  title="Switch role to test specific role permissions"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#00DF82]" />
+                  <span className="truncate max-w-[110px]">
+                    {ROLE_OPTIONS.find((r) => r.role === currentRole)?.label}
+                  </span>
+                  <ChevronDown className="w-3 h-3 opacity-70" />
+                </button>
 
-              {roleDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-[#0B222E] border border-[#0A9396]/40 rounded-xl shadow-2xl py-2 z-50 backdrop-blur-lg">
-                  <div className="px-3 py-1.5 text-[11px] font-bold tracking-wider text-slate-400 uppercase border-b border-slate-700/50">
-                    Active System Role:
+                {roleDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-64 bg-[#0B222E] border border-[#0A9396]/40 rounded-xl shadow-2xl py-2 z-50 backdrop-blur-lg">
+                    <div className="px-3 py-1.5 text-[11px] font-bold tracking-wider text-slate-400 uppercase border-b border-slate-700/50">
+                      Active System Role:
+                    </div>
+                    {ROLE_OPTIONS.map((item) => (
+                      <button
+                        key={item.role}
+                        onClick={() => {
+                          setCurrentRole(item.role);
+                          setRoleDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-[#0F2C3A] transition-colors ${
+                          currentRole === item.role
+                            ? 'text-[#00B4D8] font-bold bg-[#0F2C3A]/60'
+                            : 'text-slate-300'
+                        }`}
+                      >
+                        <span>{item.label}</span>
+                        {currentRole === item.role && (
+                          <span className="w-2 h-2 rounded-full bg-[#00DF82] shadow-[0_0_8px_#00DF82]" />
+                        )}
+                      </button>
+                    ))}
                   </div>
-                  {ROLE_OPTIONS.map((item) => (
-                    <button
-                      key={item.role}
-                      onClick={() => {
-                        setCurrentRole(item.role);
-                        setRoleDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-[#0F2C3A] transition-colors ${
-                        currentRole === item.role
-                          ? 'text-[#00B4D8] font-bold bg-[#0F2C3A]/60'
-                          : 'text-slate-300'
-                      }`}
-                    >
-                      <span>{item.label}</span>
-                      {currentRole === item.role && (
-                        <span className="w-2 h-2 rounded-full bg-[#00DF82] shadow-[0_0_8px_#00DF82]" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Dashboard / Management Portal Button */}
             <Link
@@ -201,20 +203,24 @@ export const Navbar: React.FC = () => {
           ))}
 
           <div className="pt-4 border-t border-slate-800 space-y-3">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Switch Role for Demo:
-            </div>
-            <select
-              value={currentRole}
-              onChange={(e) => setCurrentRole(e.target.value as UserRole)}
-              className="w-full bg-[#0F2C3A] text-white border border-[#0A9396]/40 rounded-lg p-2 text-sm"
-            >
-              {ROLE_OPTIONS.map((opt) => (
-                <option key={opt.role} value={opt.role}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            {isAdminAuthenticated && (
+              <>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Active Role (Authorized):
+                </div>
+                <select
+                  value={currentRole}
+                  onChange={(e) => setCurrentRole(e.target.value as UserRole)}
+                  className="w-full bg-[#0F2C3A] text-white border border-[#0A9396]/40 rounded-lg p-2 text-sm"
+                >
+                  {ROLE_OPTIONS.map((opt) => (
+                    <option key={opt.role} value={opt.role}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
 
             <Link
               href="/dashboard"

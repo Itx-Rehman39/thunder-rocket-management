@@ -21,7 +21,8 @@ export const LiveScorer: React.FC<LiveScorerProps> = ({ matchId = 'm-2' }) => {
     setLiveBowler,
   } = useApp();
 
-  const match = matches.find((m) => m.id === matchId) || matches[1];
+  const match = matches.find((m) => m.id === matchId) || matches[0];
+  const maxOvers = match?.totalOvers || (match?.matchType === 'T10' ? 10 : match?.matchType === 'ODI' ? 50 : 20);
 
   const [wicketModalOpen, setWicketModalOpen] = useState(false);
   const [selectedWicketType, setSelectedWicketType] = useState<any>('Caught');
@@ -52,6 +53,7 @@ export const LiveScorer: React.FC<LiveScorerProps> = ({ matchId = 'm-2' }) => {
       : '0.00';
 
   const handleScoreRuns = (runs: number) => {
+    if (!match) return;
     if (runs === 6) {
       try {
         confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 } });
@@ -65,6 +67,7 @@ export const LiveScorer: React.FC<LiveScorerProps> = ({ matchId = 'm-2' }) => {
   };
 
   const handleExtra = (type: 'wide' | 'noBall' | 'bye' | 'legBye') => {
+    if (!match) return;
     recordBall(match.id, {
       runs: 0,
       isWide: type === 'wide',
@@ -77,6 +80,7 @@ export const LiveScorer: React.FC<LiveScorerProps> = ({ matchId = 'm-2' }) => {
   };
 
   const handleWicketConfirm = () => {
+    if (!match) return;
     recordBall(match.id, {
       runs: 0,
       isWicket: true,
@@ -122,7 +126,7 @@ export const LiveScorer: React.FC<LiveScorerProps> = ({ matchId = 'm-2' }) => {
             </span>
           </div>
           <span className="text-slate-400 font-mono text-sm">
-            ({currentScore.overs} / 20 ov)
+            ({currentScore.overs} / {maxOvers} ov)
           </span>
         </div>
       </div>

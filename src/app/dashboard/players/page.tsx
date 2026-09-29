@@ -48,6 +48,7 @@ export default function DashboardPlayersPage() {
     phone: '',
     isCaptain: false,
     isViceCaptain: false,
+    isWicketkeeper: false,
     stats: {
       matches: 0,
       runs: 0,
@@ -86,6 +87,7 @@ export default function DashboardPlayersPage() {
       phone: '+92 300 0000000',
       isCaptain: false,
       isViceCaptain: false,
+      isWicketkeeper: false,
       stats: {
         matches: 0,
         runs: 0,
@@ -126,6 +128,7 @@ export default function DashboardPlayersPage() {
       phone: player.contact?.phone || '',
       isCaptain: !!player.isCaptain,
       isViceCaptain: !!player.isViceCaptain,
+      isWicketkeeper: !!player.isWicketkeeper,
       stats: {
         matches: player.stats?.matches || 0,
         runs: player.stats?.runs || 0,
@@ -166,6 +169,7 @@ export default function DashboardPlayersPage() {
         bio: formData.bio,
         isCaptain: formData.isCaptain,
         isViceCaptain: formData.isViceCaptain,
+        isWicketkeeper: formData.isWicketkeeper,
         contact: {
           email: formData.email,
           phone: formData.phone,
@@ -208,6 +212,7 @@ export default function DashboardPlayersPage() {
         bio: formData.bio,
         isCaptain: formData.isCaptain,
         isViceCaptain: formData.isViceCaptain,
+        isWicketkeeper: formData.isWicketkeeper,
         contact: {
           email: formData.email,
           phone: formData.phone,
@@ -336,6 +341,11 @@ export default function DashboardPlayersPage() {
                             {player.isCaptain && (
                               <span className="text-[9px] bg-[#881337] text-white px-1.5 py-0.2 rounded font-bold">
                                 (C)
+                              </span>
+                            )}
+                            {player.isWicketkeeper && (
+                              <span className="text-[9px] bg-[#0B222E] text-[#00E5FF] px-1.5 py-0.2 rounded font-bold">
+                                (WK)
                               </span>
                             )}
                           </div>
@@ -492,6 +502,29 @@ export default function DashboardPlayersPage() {
                       <option value="All-Rounder">All-Rounder</option>
                       <option value="Wicketkeeper">Wicketkeeper</option>
                     </select>
+                  </div>
+
+                  {/* Captain and Wicketkeeper Toggles */}
+                  <div className="col-span-1 sm:col-span-2 flex flex-wrap items-center gap-6 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={formData.isCaptain}
+                        onChange={(e) => setFormData({ ...formData, isCaptain: e.target.checked })}
+                        className="w-4 h-4 rounded text-[#881337] focus:ring-0 cursor-pointer"
+                      />
+                      <span>Designate as Team Captain (C)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={formData.isWicketkeeper}
+                        onChange={(e) => setFormData({ ...formData, isWicketkeeper: e.target.checked })}
+                        className="w-4 h-4 rounded text-[#00B4D8] focus:ring-0 cursor-pointer"
+                      />
+                      <span>Designate as Wicketkeeper (WK)</span>
+                    </label>
                   </div>
 
                   <div>

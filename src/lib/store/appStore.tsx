@@ -203,48 +203,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Helper to fetch persistent data from server API
-  const refreshServerData = useCallback(async () => {
+  // Helper to fetch persistent data from server API (only if client has not initialized local modifications)
+  const refreshServerData = useCallback(async (forceOverride = false) => {
     try {
       const res = await fetch('/api/data', { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
-      if (data.players && Array.isArray(data.players)) {
+      
+      const hasLocalPlayers = !!localStorage.getItem('tr_players');
+      if (data.players && Array.isArray(data.players) && (!hasLocalPlayers || forceOverride)) {
         setPlayers(data.players);
         try { localStorage.setItem('tr_players', JSON.stringify(data.players)); } catch (e) {}
       }
-      if (data.coaches && Array.isArray(data.coaches)) {
+      const hasLocalCoaches = !!localStorage.getItem('tr_coaches');
+      if (data.coaches && Array.isArray(data.coaches) && (!hasLocalCoaches || forceOverride)) {
         setCoaches(data.coaches);
         try { localStorage.setItem('tr_coaches', JSON.stringify(data.coaches)); } catch (e) {}
       }
-      if (data.matches && Array.isArray(data.matches)) {
+      const hasLocalMatches = !!localStorage.getItem('tr_matches');
+      if (data.matches && Array.isArray(data.matches) && (!hasLocalMatches || forceOverride)) {
         setMatches(data.matches);
         try { localStorage.setItem('tr_matches', JSON.stringify(data.matches)); } catch (e) {}
       }
-      if (data.trainingSessions && Array.isArray(data.trainingSessions)) {
+      const hasLocalTraining = !!localStorage.getItem('tr_training');
+      if (data.trainingSessions && Array.isArray(data.trainingSessions) && (!hasLocalTraining || forceOverride)) {
         setTrainingSessions(data.trainingSessions);
         try { localStorage.setItem('tr_training', JSON.stringify(data.trainingSessions)); } catch (e) {}
       }
-      if (data.announcements && Array.isArray(data.announcements)) {
+      const hasLocalAnn = !!localStorage.getItem('tr_announcements');
+      if (data.announcements && Array.isArray(data.announcements) && (!hasLocalAnn || forceOverride)) {
         setAnnouncements(data.announcements);
         try { localStorage.setItem('tr_announcements', JSON.stringify(data.announcements)); } catch (e) {}
       }
-      if (data.galleryItems && Array.isArray(data.galleryItems)) {
+      const hasLocalGallery = !!localStorage.getItem('tr_gallery');
+      if (data.galleryItems && Array.isArray(data.galleryItems) && (!hasLocalGallery || forceOverride)) {
         setGalleryItems(data.galleryItems);
+        try { localStorage.setItem('tr_gallery', JSON.stringify(data.galleryItems)); } catch (e) {}
       }
-      if (data.playingXIIds && Array.isArray(data.playingXIIds)) {
+      const hasLocalXI = !!localStorage.getItem('tr_playing_xi');
+      if (data.playingXIIds && Array.isArray(data.playingXIIds) && (!hasLocalXI || forceOverride)) {
         setPlayingXIIdsState(data.playingXIIds);
         try { localStorage.setItem('tr_playing_xi', JSON.stringify(data.playingXIIds)); } catch (e) {}
       }
-      if (data.kitConfig) {
+      const hasLocalKit = !!localStorage.getItem('tr_kit_config');
+      if (data.kitConfig && (!hasLocalKit || forceOverride)) {
         setKitConfig(data.kitConfig);
         try { localStorage.setItem('tr_kit_config', JSON.stringify(data.kitConfig)); } catch (e) {}
       }
-      if (data.clubSettings) {
+      const hasLocalClub = !!localStorage.getItem('tr_club_settings');
+      if (data.clubSettings && (!hasLocalClub || forceOverride)) {
         setClubSettings(data.clubSettings);
         try { localStorage.setItem('tr_club_settings', JSON.stringify(data.clubSettings)); } catch (e) {}
       }
-      if (data.adminAccounts && Array.isArray(data.adminAccounts)) {
+      const hasLocalAccounts = !!localStorage.getItem('tr_admin_accounts');
+      if (data.adminAccounts && Array.isArray(data.adminAccounts) && (!hasLocalAccounts || forceOverride)) {
         setAdminAccounts(data.adminAccounts);
         try { localStorage.setItem('tr_admin_accounts', JSON.stringify(data.adminAccounts)); } catch (e) {}
       }
@@ -253,7 +265,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Initialization & Live Polling
+  // Initialization: Permanent LocalStorage Priority
   useEffect(() => {
     // 1. Check Auth State - strictly only true if stored as 'true'
     try {
@@ -274,7 +286,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentRole('PUBLIC');
       }
 
-      // Fast-load local cache while server fetch completes
+      // Fast-load local cache
       const storedPlayers = localStorage.getItem('tr_players');
       if (storedPlayers) setPlayers(JSON.parse(storedPlayers));
 
@@ -306,18 +318,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (storedAccounts) setAdminAccounts(JSON.parse(storedAccounts));
     } catch (e) {}
 
-    // 2. Fetch fresh persistent data from server immediately
-    refreshServerData();
-
-    // 3. Keep open tabs/devices synced in background (every 8 seconds + window focus)
-    const syncInterval = setInterval(refreshServerData, 8000);
-    const onWindowFocus = () => refreshServerData();
-    window.addEventListener('focus', onWindowFocus);
-
-    return () => {
-      clearInterval(syncInterval);
-      window.removeEventListener('focus', onWindowFocus);
-    };
+    // Only fetch from server if client is brand-new (no local records stored yet)
+    if (!localStorage.getItem('tr_players')) {
+      refreshServerData();
+    }
   }, [refreshServerData]);
 
   // Save role to state

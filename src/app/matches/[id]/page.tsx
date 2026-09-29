@@ -64,7 +64,7 @@ export default function MatchDetailPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-full bg-[#0F2C3A] text-cyan-300 font-bold text-xs uppercase tracking-wider border border-[#0A9396]/30">
-                    {match.matchType}
+                    {match.totalOvers ? `${match.totalOvers} Overs` : match.matchType}
                   </span>
                   <span className="text-xs text-slate-300 font-medium">
                     {match.competition}

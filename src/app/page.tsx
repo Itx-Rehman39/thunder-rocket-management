@@ -26,7 +26,8 @@ import {
   Shirt,
   Camera,
   Check,
-  Eye
+  Eye,
+  Lock
 } from 'lucide-react';
 import { OFFICIAL_KIT_PRESETS } from '@/components/brand/JerseyGraphic';
 
@@ -531,18 +532,18 @@ export default function HomePage() {
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <Link
-                  href="/dashboard/kit"
+                  href="/gallery"
                   className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#00B4D8] to-[#0A9396] hover:from-[#00DF82] hover:to-[#00B4D8] text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg transition-all flex items-center gap-2"
                 >
-                  <Shirt className="w-4 h-4" />
-                  <span>Open Kit Designer Console</span>
+                  <Camera className="w-4 h-4" />
+                  <span>View Official Kit in Gallery</span>
                 </Link>
                 <Link
-                  href="/gallery"
+                  href="/about"
                   className="px-5 py-3 rounded-xl bg-[#0F2C3A] hover:bg-[#13384A] text-cyan-300 font-bold text-xs uppercase tracking-wider border border-[#0A9396]/40 transition-all flex items-center gap-2"
                 >
-                  <Camera className="w-4 h-4" />
-                  <span>View Photos in Gallery</span>
+                  <Shirt className="w-4 h-4" />
+                  <span>About Franchise Identity</span>
                 </Link>
               </div>
 
@@ -655,10 +656,11 @@ export default function HomePage() {
 
             <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
               <Link
-                href="/dashboard"
-                className="px-8 py-3.5 rounded-xl font-black text-sm uppercase tracking-wider text-slate-950 bg-gradient-to-r from-[#00E5FF] to-[#00DF82] hover:brightness-110 shadow-lg transition-all"
+                href="/login"
+                className="px-8 py-3.5 rounded-xl font-black text-sm uppercase tracking-wider text-slate-950 bg-gradient-to-r from-[#00E5FF] to-[#00DF82] hover:brightness-110 shadow-lg transition-all flex items-center gap-2"
               >
-                Access Team Management Portal
+                <Lock className="w-4 h-4 text-[#071820]" />
+                <span>Authorized Staff Portal (Login Required)</span>
               </Link>
               <Link
                 href="/squad"

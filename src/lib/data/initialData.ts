@@ -14,7 +14,7 @@ export const INITIAL_PLAYERS: Player[] = [
     nationality: 'Pakistan',
     joinedYear: 2023,
     photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
-    isCaptain: true,
+    isCaptain: false,
     status: 'Active',
     bio: 'Dynamic modern all-rounder and inspirational captain of Thunder Rockets. Known for explosive middle-order hitting, deceptive medium pace, and unmatched athletic leadership on the field.',
     contact: {
@@ -158,7 +158,7 @@ export const INITIAL_PLAYERS: Player[] = [
     nationality: 'Pakistan',
     joinedYear: 2023,
     photoUrl: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=600&q=80',
-    isWicketkeeper: true,
+    isWicketkeeper: false,
     status: 'Active',
     bio: 'Lightning-fast glovesman behind the stumps and a gritty, innovative middle-order finisher.',
     stats: {
